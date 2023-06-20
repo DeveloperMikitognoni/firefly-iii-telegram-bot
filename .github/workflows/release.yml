@@ -3,9 +3,12 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    branches: [ master ]
     paths-ignore:
-      - 'README.md'
+      - './*.md'
+    tags:
+      - 'v[0-9]+.[0-9]+.*'
+    branches:
+      - master
 
 env:
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
@@ -14,7 +17,8 @@ env:
   FORCE_COLOR: 1
 
 jobs:
-  build_and_push:
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU for multiplatform builds
@@ -37,7 +41,7 @@ jobs:
           git checkout -b "$branch" || true
 
       - name: Download Earthly
-        run: "sudo /bin/sh -c 'wget https://github.com/earthly/earthly/releases/download/v0.6.30/earthly-linux-amd64 -O /usr/local/bin/earthly && chmod +x /usr/local/bin/earthly'"
+        run: "sudo /bin/sh -c 'wget https://github.com/earthly/earthly/releases/download/v0.7.8/earthly-linux-amd64 -O /usr/local/bin/earthly && chmod +x /usr/local/bin/earthly'"
 
       - name: Earthly version
         run: earthly --version
@@ -47,10 +51,12 @@ jobs:
       
       - name: Build and push docker image
         run: |
-          earthly --ci --push +multiplatformBuild \
+          earthly --ci --push +build-and-release \
+            --GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             --DOCKERHUB_REPO=$GITHUB_REPO \
             --DOCKERHUB_USERNAME=$DOCKERHUB_USERNAME \
-            --DOCKERHUB_ACCESS_TOKEN=$DOCKERHUB_TOKEN
+            --DOCKERHUB_ACCESS_TOKEN=$DOCKERHUB_TOKEN \
+            --RELEASE_VERSION=${GITHUB_REF:10}
       
       - name: Docker Hub Description
         uses: peter-evans/dockerhub-description@v3
